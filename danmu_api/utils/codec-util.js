@@ -1,4 +1,5 @@
 import { log } from "./log-util.js";
+import brotliDecompress from "brotli/decompress.js";
 
 // =====================
 // 通用编码/解码工具
@@ -335,12 +336,12 @@ function rotWord(word){
 }
 
 // 字节代换
-function subWord(word){
+export function subWord(word){
   return Uint8Array.from(word.map(b=>SBOX[b]));
 }
 
 // 扩展密钥 16 字节 -> 176 字节
-function keyExpansion(key) {
+export function keyExpansion(key) {
   const Nk = 4, Nb=4, Nr=10;
   const w = new Array(Nb*(Nr+1));
   for(let i=0;i<Nk;i++){
@@ -372,7 +373,7 @@ function aesDecryptBlock(input, w) {
 }
 
 // AES 辅助函数
-function addRoundKey(state, w){
+export function addRoundKey(state, w){
   const out = new Uint8Array(16);
   for(let c=0;c<4;c++)
     for(let r=0;r<4;r++)
@@ -380,13 +381,13 @@ function addRoundKey(state, w){
   return out;
 }
 
-function invSubBytes(state){
+export function invSubBytes(state){
   const INV_SBOX = new Array(256);
   for(let i=0;i<256;i++) INV_SBOX[SBOX[i]]=i;
   return Uint8Array.from(state.map(b=>INV_SBOX[b]));
 }
 
-function invShiftRows(state){
+export function invShiftRows(state){
   const out = new Uint8Array(16);
   for(let r=0;r<4;r++)
     for(let c=0;c<4;c++)
@@ -449,6 +450,21 @@ export function base64ToBytes(b64) {
     bytes[i] = binaryString.charCodeAt(i);
   }
   return bytes;
+}
+
+// 纯 JavaScript Brotli 解压，兼容不提供原生解压 API 的沙箱。
+export function decompressBrotli(bytes) {
+  if (bytes == null) {
+    throw new TypeError("Brotli 输入不能为空");
+  }
+
+  const input = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const output = brotliDecompress(input);
+  if (!output) {
+    throw new Error("Brotli 解压失败");
+  }
+
+  return output instanceof Uint8Array ? output : new Uint8Array(output);
 }
 
 // 自定义 Base64 解码函数
@@ -539,7 +555,7 @@ function aesDecryptBase64(cipherB64, keyStr) {
     const unpadded = pkcs7Unpad(decryptedBytes);
     return utf8BytesToString(unpadded);
   } catch (e) {
-    log("error", e);
+    log("error", "[Utils] [Codec]", e);
     return null;
   }
 }
@@ -744,8 +760,15 @@ function fromCodePoint(codePoint) {
    * @returns {string} 转换后的字符串
    */
 export function decodeHtmlEntities(str) {
+  if (!str) return str;
+  const namedEntities = { '&lt;': '<', '&gt;': '>', '&amp;': '&', '&quot;': '"', '&apos;': "'" };
+
+  // 处理命名HTML实体
+  return str.replace(/&[a-zA-Z]+;/g, match => {
+    return namedEntities[match] || match;
+  })
   // 处理十进制HTML实体 &#12345;
-  return str.replace(/&#(\d+);/g, (match, num) => {
+  .replace(/&#(\d+);/g, (match, num) => {
     return fromCodePoint(parseInt(num, 10));
   })
   // 处理十六进制HTML实体 &#x123A;
