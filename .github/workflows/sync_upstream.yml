@@ -39,7 +39,7 @@ jobs:
           git read-tree --reset -u upstream/main
 
           # 删除上游工作流，避免 workflows 权限错误
-          git rm -r --ignore-unmatch .github/workflows
+          git rm -rf --ignore-unmatch .github/workflows
 
           # 恢复并仅保留本仓库自己的同步工作流
           git checkout origin/main -- \
