@@ -22,7 +22,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Merge upstream main
+      - name: Sync upstream source
         shell: bash
         run: |
           set -euo pipefail
@@ -35,16 +35,22 @@ jobs:
             https://github.com/huangxd-/danmu_api.git
           git fetch upstream main
 
-          if git merge-base HEAD upstream/main >/dev/null 2>&1; then
-            git merge --no-edit -X theirs upstream/main
-          else
-            git merge --no-edit \
-              --allow-unrelated-histories \
-              -X theirs upstream/main
+          # 将代码树更新为上游最新版本，但不引入上游提交历史
+          git read-tree --reset -u upstream/main
+
+          # 删除上游工作流，避免 workflows 权限错误
+          git rm -r --ignore-unmatch .github/workflows
+
+          # 恢复并仅保留本仓库自己的同步工作流
+          git checkout origin/main -- \
+            .github/workflows/sync_upstream.yml
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "Already up to date."
+            exit 0
           fi
 
-          if git diff --quiet origin/main..HEAD; then
-            echo "Already up to date."
-          else
-            git push origin HEAD:main
-          fi
+          git commit -m "chore: sync source from upstream"
+          git push origin HEAD:main
