@@ -1,0 +1,50 @@
+name: Daily Upstream Sync
+
+on:
+  schedule:
+    - cron: "17 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Merge upstream main
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git remote add upstream \
+            https://github.com/huangxd-/danmu_api.git
+          git fetch upstream main
+
+          if git merge-base HEAD upstream/main >/dev/null 2>&1; then
+            git merge --no-edit -X theirs upstream/main
+          else
+            git merge --no-edit \
+              --allow-unrelated-histories \
+              -X theirs upstream/main
+          fi
+
+          if git diff --quiet origin/main..HEAD; then
+            echo "Already up to date."
+          else
+            git push origin HEAD:main
+          fi
